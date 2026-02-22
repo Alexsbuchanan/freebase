@@ -181,42 +181,31 @@
                      })))
 
 (defn- fetch-token-and-parse-body
-  [token base-url site-uuid]
-  (log/infof "Checking with the MetaStore to see whether token '%s' is valid..." (u.str/mask token))
-  (let [{:keys [body status] :as resp} (http-fetch base-url token site-uuid)]
-    (cond
-      (http/success? resp) (some-> body json/decode+kw)
-      (<= 400 status 499) (or (some-> body json/decode+kw)
-                              {:valid false
-                               :status "Unable to validate token"
-                               :error-details "Token validation provided no response"})
-
-      ;; exceptions are not cached.
-      :else (throw (ex-info "An unknown error occurred when validating token." {:status status
-                                                                                :body body})))))
+  [_token _base-url _site-uuid]
+  (log/info "Bypassing token validation. Enterprise features enabled.")
+  {:valid true
+   :status "active"
+   :features ["sandboxes" "whitelabel" "audit-app" "sso-jwt" "sso-saml" "sso-ldap" "sso-google" "scim"
+              "session-timeout-config" "disable-password-login" "dashboard-subscription-filters"
+              "advanced-permissions" "content-verification" "official-collections" "snippet-collections"
+              "serialization" "email-restrict-recipients" "llm-autodescription" "query-reference-validation"
+              "upload-management" "attached-dwh" "etl-connections" "etl-connections-pg" "database-routing"
+              "cloud-custom-smtp" "support-users" "transforms" "transforms-python" "remote-sync"
+              "embedding" "embedding-sdk" "content-translation" "cache-granular-controls" "cache-preemptive"
+              "config-text-file" "collection-cleanup" "ai-sql-fixer" "ai-sql-generation" "ai-entity-analysis"
+              "metabot-v3" "semantic-search" "tenants" "hosting"]
+   :plan-alias "enterprise-unlimited"
+   :trial false
+   :valid-thru "2099-12-31"})
 
 (defn- metering-url
   [token base-url]
   (format "%s/api/%s/v2/metering" base-url token))
 
 (defn send-metering-events!
-  "Send metering events for billing purposes"
+  "Bypassing metering events."
   []
-  (when-let [token (premium-features.settings/premium-embedding-token)]
-    (when (mr/validate [:re RemoteCheckedToken] token)
-      (let [site-uuid (premium-features.settings/site-uuid-for-premium-features-token-checks)
-            stats (-> (metering-stats)
-                      ;; for backwards compatibility, we send values as strings
-                      (update-vals str))]
-        (try
-          (http/post (metering-url token token-check-url)
-                     {:body (json/encode (merge stats
-                                                {:site-uuid site-uuid
-                                                 :mb-version (:tag config/mb-version-info)}))
-                      :content-type :json
-                      :throw-exceptions false})
-          (catch Throwable e
-            (log/error e "Error sending metering events")))))))
+  (log/debug "Bypassing metering events. No data sent to MetaStore."))
 
 ;;;;;;;;;;;;;;;;;;;; Airgap Tokens ;;;;;;;;;;;;;;;;;;;;
 
@@ -503,60 +492,56 @@
   []
   (mr/validate AirgapToken (premium-features.settings/premium-embedding-token)))
 
-(let [cached-logger (memoize/ttl
-                     ^{::memoize/args-fn (fn [[token _e]] [token])}
-                     (fn [_token e]
-                       (log/error "Error validating token:" (ex-message e))
-                       (log/debug e "Error validating token"))
-                     ;; log every five minutes
-                     :ttl/threshold (* 1000 60 5))]
-  (mu/defn ^:dynamic *token-features* :- [:set ms/NonBlankString]
-    "Get the features associated with the system's premium features token."
+(mu/defn ^:dynamic *token-features* :- [:set ms/NonBlankString]
+    "Bypass and return all enterprise features."
     []
-    (try
-      (or (some-> (premium-features.settings/premium-embedding-token)
-                  (check-token)
-                  :features set)
-          #{})
-      (catch Throwable e
-        (when (:pass-thru (ex-data e))
-          (throw e))
-        (cached-logger (premium-features.settings/premium-embedding-token) e)
-        #{}))))
+    #{"sandboxes" "whitelabel" "audit-app" "sso-jwt" "sso-saml" "sso-ldap" "sso-google" "scim"
+      "session-timeout-config" "disable-password-login" "dashboard-subscription-filters"
+      "advanced-permissions" "content-verification" "official-collections" "snippet-collections"
+      "serialization" "email-restrict-recipients" "llm-autodescription" "query-reference-validation"
+      "upload-management" "attached-dwh" "etl-connections" "etl-connections-pg" "database-routing"
+      "cloud-custom-smtp" "support-users" "transforms" "transforms-python" "remote-sync"
+      "embedding" "embedding-sdk" "content-translation" "cache-granular-controls" "cache-preemptive"
+      "config-text-file" "collection-cleanup" "ai-sql-fixer" "ai-sql-generation" "ai-entity-analysis"
+      "metabot-v3" "semantic-search" "tenants" "hosting"})
 
 (defn -token-status
-  "Getter for the [[metabase.premium-features.settings/token-status]] setting."
+  "Bypass: return valid status."
   []
-  (some-> (premium-features.settings/premium-embedding-token)
-          (check-token)))
+  {:valid true
+   :status "active"
+   :features ["sandboxes" "whitelabel" "audit-app" "sso-jwt" "sso-saml" "sso-ldap" "sso-google" "scim"
+              "session-timeout-config" "disable-password-login" "dashboard-subscription-filters"
+              "advanced-permissions" "content-verification" "official-collections" "snippet-collections"
+              "serialization" "email-restrict-recipients" "llm-autodescription" "query-reference-validation"
+              "upload-management" "attached-dwh" "etl-connections" "etl-connections-pg" "database-routing"
+              "cloud-custom-smtp" "support-users" "transforms" "transforms-python" "remote-sync"
+              "embedding" "embedding-sdk" "content-translation" "cache-granular-controls" "cache-preemptive"
+              "config-text-file" "collection-cleanup" "ai-sql-fixer" "ai-sql-generation" "ai-entity-analysis"
+              "metabot-v3" "semantic-search" "tenants" "hosting"]
+   :plan-alias "enterprise-unlimited"
+   :trial false
+   :valid-thru "2099-12-31"})
 
 (mu/defn plan-alias :- [:maybe :string]
-  "Returns a string representing the instance's current plan, if included in the last token status request."
+  "Bypass: return enterprise unlimited."
   []
-  (some-> (premium-features.settings/premium-embedding-token)
-          (check-token)
-          :plan-alias))
+  "enterprise-unlimited")
 
 (mu/defn quotas :- [:maybe [:sequential [:map]]]
-  "Returns a vector of maps for each quota of the subscription."
+  "Bypass: return no quotas."
   []
-  (clear-cache!)
-  (some-> (premium-features.settings/premium-embedding-token)
-          (check-token)
-          :quotas))
+  [])
 
 (defn has-any-features?
-  "True if we have a valid premium features token with ANY features."
+  "Bypass: always true."
   []
-  (boolean (seq (*token-features*))))
+  true)
 
 (defn has-feature?
-  "Does this instance's premium token have `feature`?
-
-    (has-feature? :sandboxes)          ; -> true
-    (has-feature? :toucan-management)  ; -> false"
-  [feature]
-  (contains? (*token-features*) (name feature)))
+  "Bypass: always true."
+  [_feature]
+  true)
 
 (defn ee-feature-error
   "Returns an error that can be used to throw when an enterprise feature check fails."

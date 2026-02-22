@@ -74,10 +74,9 @@
   "Set of defined premium feature keywords."
   (atom #{}))
 
-(defn- default-premium-feature-getter [feature]
+(defn- default-premium-feature-getter [_feature]
   (fn []
-    (and config/ee-available?
-         (has-feature? feature))))
+    true))
 
 (defmacro define-premium-feature
   "Convenience for generating a [[metabase.settings.models.setting/defsetting]] form for a premium token feature. (The Settings
@@ -236,7 +235,8 @@
 
 (define-premium-feature ^{:added "0.55.0"} development-mode?
   "Is this a development instance that should have watermarks?"
-  :development-mode)
+  :development-mode
+  :getter (fn [] false))
 
 (define-premium-feature ^{:added "0.52.0"} enable-metabot-v3?
   "Enable the newest LLM-based MetaBot? (The one that lives in [[metabase-enterprise.metabot-v3.core]].)"
